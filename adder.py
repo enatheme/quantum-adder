@@ -2,49 +2,50 @@ from qiskit import QuantumRegister, ClassicalRegister, QuantumCircuit
 from qiskit import IBMQ, Aer, execute
 
 def simple_adder(lhs, rhs): # string of bits
-    print(lhs)
-    print(rhs)
     assert(len(lhs) == len(rhs))
     len_arg = len(lhs)
-    q = QuantumRegister(17) # we add 2 4 bits number, result will be in the last 5 bits (overflow)
-    c = ClassicalRegister(5)
+    assert(len_arg < 5)
+    print(len_arg)
+    q = QuantumRegister(len_arg * 4 + 1) # input1 + input2 + result + carry over + 1 (overflow)
+    c = ClassicalRegister(len_arg + 1)
     qc = QuantumCircuit(q, c)
-    assert(len(lhs) < 5)
-    assert(len(rhs) < 5)
+
+    input1_index = 0
+    input2_index = len_arg
+    carryover_index = input2_index + len_arg
+    result_index = carryover_index + len_arg
 
     for ii, yesno in enumerate(lhs):
         if yesno == '1':
             qc.x(ii)
     for ii, yesno in enumerate(rhs):
         if yesno == '1':
-            qc.x(ii + 4)
+            qc.x(ii + len_arg)
     qc.barrier()
-    for i in range(0, 4):
+    for i in range(0, len_arg):
         # XOR Gate
-        qc.cx(q[0 + i], q[8 + i])
-        qc.cx(q[4 + i], q[8 + i])
-        
+        qc.cx(q[input1_index + i], q[result_index + i])
+        qc.cx(q[input2_index + i], q[result_index + i])
+
         # apply carry over
         if i > 0:
-            qc.cx(q[13 + i - 1], q[8 + i])
-        
-        # carry over (ND Gate)
-        qc.ccx(q[0 + i], q[4 + i], q[13 + i])
-        qc.ccx(q[0 + i], q[13 + i - 1], q[13 + i])
-        qc.ccx(q[4 + i], q[13 + i - 1], q[13 + i])
-        
+            qc.cx(q[carryover_index + i - 1], q[input2_index + i])
+
+        # carry over (NAND Gate)
+        qc.ccx(q[input1_index + i], q[input2_index + i], q[carryover_index + i])
+        qc.ccx(q[input1_index + i], q[carryover_index + i - 1], q[carryover_index + i])
+        qc.ccx(q[input2_index + i], q[carryover_index + i - 1], q[carryover_index + i])
+
     qc.barrier()
-    qc.measure(q[8], c[0])
-    qc.measure(q[9], c[1])
-    qc.measure(q[10], c[2])
-    qc.measure(q[11], c[3])
+    for i in range(result_index, result_index + len_arg + 1):
+        qc.measure(q[i], c[i - result_index])
     return qc
 
 def add_circuit(lhs, rhs):
     # int to string of bit
     l = bin(lhs)[2:][::-1]
     r = bin(rhs)[2:][::-1]
-    
+
     len_diff = len(l) - len(r)
     if len_diff > 0: # lhs > rhs
         r += '0' * len_diff
@@ -60,8 +61,8 @@ def add(lhs, rhs):
     for each in result.get_counts().keys():
         return int(each, 2)
 
-lhs = 1
-rhs = 3
+lhs = 4
+rhs = 0
 
 #qc = add_circuit(lhs, rhs)
 #qc.draw(output='mpl')
